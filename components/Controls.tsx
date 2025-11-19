@@ -66,9 +66,9 @@ const Controls: React.FC<ControlsProps> = ({
                     <button onClick={onLoadPlan} className="btn-primary">1. Tải Kế hoạch Dạy học</button>
                     {isPlanLoaded && (
                         <>
-                            {selectedSubject === 'TinHoc' && (
-                                <button onClick={onFillGoc} className="btn-primary">2. Tải bản gốc (ĐH Vinh)</button>
-                            )}
+                            <button onClick={onFillGoc} className="btn-primary">
+                                {selectedSubject === 'TinHoc' ? '2. Tải bản gốc (ĐH Vinh)' : '2. Tải bản gốc (Chưa gắn NLS)'}
+                            </button>
                             <button onClick={onAutoBuild} className="btn-autobuild">3. Tự động Xây dựng (CV 3456)</button>
                             <button onClick={onShowL123} className="btn-info">4. Tra cứu NLS Lớp 1-2-3</button>
                             <button onClick={onShowL45} className="btn-info">5. Tra cứu NLS Lớp 4-5</button>
