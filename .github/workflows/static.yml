@@ -30,6 +30,8 @@ jobs:
         run: npm install
       - name: Build
         run: npm run build
+        env:
+           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # <--- Dòng này giúp AI hoạt động
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
