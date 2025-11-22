@@ -1,6 +1,29 @@
 import { GoogleGenAI } from '@google/genai';
 import { NlsDatabase } from '../types';
 
+// Helper to format grounding metadata from Google Search
+const formatSources = (groundingMetadata: any): string => {
+    if (!groundingMetadata?.groundingChunks) return '';
+    
+    const uniqueSources = new Map();
+    
+    groundingMetadata.groundingChunks.forEach((chunk: any) => {
+        if (chunk.web?.uri && chunk.web?.title) {
+            if (!uniqueSources.has(chunk.web.uri)) {
+                uniqueSources.set(chunk.web.uri, chunk.web.title);
+            }
+        }
+    });
+
+    if (uniqueSources.size === 0) return '';
+    
+    const sourceList = Array.from(uniqueSources.entries()).map(([uri, title]) => {
+        return `- [${title}](${uri})`;
+    });
+
+    return '\n\n---\n**🌐 Nguồn tham khảo từ Google:**\n' + sourceList.join('\n');
+};
+
 export const getGeminiSuggestion = async (
     lessonTitle: string,
     nlsCodes: string[],
@@ -32,7 +55,8 @@ Yêu cầu:
 - Trả lời bằng tiếng Việt.
 - Định dạng Markdown đơn giản (gạch đầu dòng, in đậm).
 - Tập trung vào các bước thực hiện cho học sinh.
-- Không cần viết giáo án đầy đủ, chỉ cần mô tả hoạt động.`;
+- Không cần viết giáo án đầy đủ, chỉ cần mô tả hoạt động.
+- Nếu cần, hãy tìm kiếm các ví dụ thực tế hoặc công cụ số mới nhất phù hợp với bài học.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -42,13 +66,16 @@ Yêu cầu:
                 systemInstruction: systemPrompt,
                 temperature: 0.7,
                 topP: 0.95,
+                // Enable Google Search Grounding to get up-to-date info
+                tools: [{ googleSearch: {} }],
             }
         });
 
         const text = response.text;
+        const sources = formatSources(response.candidates?.[0]?.groundingMetadata);
 
         if (text) {
-            return text;
+            return text + sources;
         } else {
             throw new Error("Không nhận được nội dung từ Gemini. Phản hồi có thể trống hoặc bị chặn.");
         }
@@ -131,8 +158,8 @@ Soạn theo định dạng Markdown, bao gồm các mục sau:
             contents: [{ role: "user", parts: [{ text: userQuery }] }],
             config: {
                 systemInstruction: systemPrompt,
-                temperature: 0.5,
-                topP: 0.95,
+                // Enable Thinking for deeper reasoning on lesson structure
+                thinkingConfig: { thinkingBudget: 4096 },
             }
         });
 
@@ -204,8 +231,8 @@ ${userLessonPlanContent}
             contents: [{ role: "user", parts: [{ text: userQuery }] }],
             config: {
                 systemInstruction: systemPrompt,
-                temperature: 0.3,
-                topP: 0.95,
+                // Thinking helps analyze where to put NLS codes most logically
+                thinkingConfig: { thinkingBudget: 2048 },
             }
         });
         
