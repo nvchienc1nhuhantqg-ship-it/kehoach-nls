@@ -36,7 +36,7 @@ Yêu cầu:
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: [{ role: "user", parts: [{ text: userQuery }] }],
             config: {
                 systemInstruction: systemPrompt,
@@ -127,7 +127,7 @@ Soạn theo định dạng Markdown, bao gồm các mục sau:
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: [{ role: "user", parts: [{ text: userQuery }] }],
             config: {
                 systemInstruction: systemPrompt,
@@ -200,7 +200,7 @@ ${userLessonPlanContent}
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: [{ role: "user", parts: [{ text: userQuery }] }],
             config: {
                 systemInstruction: systemPrompt,
