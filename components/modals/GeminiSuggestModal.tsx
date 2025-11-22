@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import ModalWrapper from './ModalWrapper';
 import SpinnerIcon from '../icons/SpinnerIcon';
+import { getGeminiAssessment } from '../../services/geminiService';
+import { NlsDatabase } from '../../types'; // Ensure types are imported
 
 // Make TypeScript aware of the global mammoth object from the CDN
 declare const mammoth: any;
@@ -20,6 +22,11 @@ interface GeminiSuggestModalProps {
     isIntegrating: boolean;
     integratedPlan: string | null;
     integrationError: string | null;
+    // Props needed for assessment generation:
+    nlsCodes?: string[]; // Make optional to maintain backward compatibility if needed, but should be passed
+    nlsDatabase?: NlsDatabase;
+    selectedClass?: string;
+    subject?: string;
 }
 
 // A simple function to convert markdown-like syntax to HTML
@@ -97,11 +104,22 @@ const GeminiSuggestModal: React.FC<GeminiSuggestModalProps> = ({
     isIntegrating,
     integratedPlan,
     integrationError,
+    nlsCodes = [],
+    nlsDatabase = {},
+    selectedClass = '3',
+    subject = 'TinHoc'
 }) => {
+    const [activeTab, setActiveTab] = useState<'plan' | 'assessment'>('plan');
     const [pastedText, setPastedText] = useState('');
     const [fileName, setFileName] = useState('');
     const [fileContent, setFileContent] = useState<string | null>(null);
     const [fileError, setFileError] = useState<string | null>(null);
+
+    // Assessment State
+    const [assessmentType, setAssessmentType] = useState<'rubric' | 'quiz' | null>(null);
+    const [assessmentContent, setAssessmentContent] = useState<string | null>(null);
+    const [isGeneratingAssessment, setIsGeneratingAssessment] = useState<boolean>(false);
+    const [assessmentError, setAssessmentError] = useState<string | null>(null);
 
     const activeContent = pastedText || fileContent;
 
@@ -169,22 +187,46 @@ const GeminiSuggestModal: React.FC<GeminiSuggestModalProps> = ({
         });
     };
 
-    const handleDownload = (content: string) => {
+    const handleDownload = (content: string, prefix: string = 'GiaoAn') => {
         const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `GiaoAn_${lessonTitle.replace(/[\s/\\?%*:|"<>]/g, '_')}.md`;
+        a.download = `${prefix}_${lessonTitle.replace(/[\s/\\?%*:|"<>]/g, '_')}.md`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
-    const renderMainContent = () => {
+    const handleGenerateAssessment = async (type: 'rubric' | 'quiz') => {
+        setAssessmentType(type);
+        setAssessmentContent(null);
+        setAssessmentError(null);
+        setIsGeneratingAssessment(true);
+
+        try {
+            const result = await getGeminiAssessment(
+                type,
+                lessonTitle,
+                nlsCodes,
+                nlsDatabase,
+                selectedClass,
+                subject
+            );
+            setAssessmentContent(result);
+        } catch (err: any) {
+            setAssessmentError(err.message || 'Có lỗi xảy ra khi tạo đánh giá.');
+        } finally {
+            setIsGeneratingAssessment(false);
+        }
+    };
+
+    // --- Render Logic for "Lesson Plan" Tab ---
+    const renderLessonPlanTab = () => {
         if (isGeneratingPlan || isIntegrating) {
              return (
-                <div className="text-center p-10 flex flex-col items-center justify-center">
+                <div className="text-center p-10 flex flex-col items-center justify-center h-96">
                     <SpinnerIcon className="w-12 h-12 text-orange-600" />
                     <p className="mt-4 font-semibold text-gray-600">
                         {isIntegrating ? 'AI đang tích hợp NLS vào giáo án của bạn...' : 'AI đang soạn giáo án chi tiết...'}
@@ -285,49 +327,115 @@ const GeminiSuggestModal: React.FC<GeminiSuggestModalProps> = ({
                 </div>
             );
         }
-        
         return null;
-    }
+    };
 
-    const renderContent = () => {
-        if (isLoading) {
-            return (
-                <div className="text-center p-10 flex flex-col items-center justify-center">
-                    <SpinnerIcon className="w-12 h-12 text-orange-600" />
-                    <p className="mt-4 font-semibold text-gray-600">Đang tạo gợi ý hoạt động...<br />Thầy/Cô vui lòng chờ trong giây lát.</p>
+    // --- Render Logic for "Assessment" Tab ---
+    const renderAssessmentTab = () => {
+        return (
+            <div className="space-y-6">
+                <div className="text-center space-y-2">
+                     <p className="text-gray-600">Sử dụng AI để tạo nhanh các công cụ đánh giá năng lực học sinh phù hợp với bài học này.</p>
+                     <div className="flex justify-center gap-4 mt-4">
+                        <button 
+                            onClick={() => handleGenerateAssessment('rubric')} 
+                            disabled={isGeneratingAssessment}
+                            className="flex flex-col items-center justify-center w-40 h-28 p-2 bg-white border-2 border-indigo-100 rounded-xl hover:border-indigo-500 hover:shadow-md transition-all group"
+                        >
+                            <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">📊</span>
+                            <span className="font-bold text-indigo-700">Tạo Rubric<br/>(Phiếu đánh giá)</span>
+                        </button>
+                        <button 
+                            onClick={() => handleGenerateAssessment('quiz')} 
+                            disabled={isGeneratingAssessment}
+                            className="flex flex-col items-center justify-center w-40 h-28 p-2 bg-white border-2 border-teal-100 rounded-xl hover:border-teal-500 hover:shadow-md transition-all group"
+                        >
+                            <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">📝</span>
+                            <span className="font-bold text-teal-700">Tạo Câu hỏi<br/>Trắc nghiệm</span>
+                        </button>
+                     </div>
                 </div>
-            );
-        }
 
-        if (error) {
-            return (
-                <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg">
-                    <p className="font-bold">Đã xảy ra lỗi</p>
-                    <p>{error}</p>
-                </div>
-            );
-        }
-        
-        return renderMainContent();
+                {isGeneratingAssessment && (
+                    <div className="text-center p-10 border rounded-lg bg-gray-50">
+                        <SpinnerIcon className="w-10 h-10 text-indigo-600 mx-auto" />
+                        <p className="mt-3 font-semibold text-gray-600">AI đang thiết kế công cụ đánh giá...</p>
+                    </div>
+                )}
+
+                {assessmentError && (
+                    <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg">
+                        <p className="font-bold">Lỗi</p>
+                        <p>{assessmentError}</p>
+                    </div>
+                )}
+
+                {assessmentContent && !isGeneratingAssessment && (
+                    <div className="border-t pt-4">
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-lg font-bold text-gray-800">
+                                {assessmentType === 'rubric' ? '📋 Phiếu đánh giá (Rubric)' : '❓ Câu hỏi trắc nghiệm'}
+                            </h4>
+                            <div className="flex gap-2">
+                                <button onClick={() => handleCopy(assessmentContent)} className="btn-table-attach">Sao chép</button>
+                                <button onClick={() => handleDownload(assessmentContent, assessmentType === 'rubric' ? 'Rubric' : 'Quiz')} className="btn-table-gemini">Tải về</button>
+                            </div>
+                        </div>
+                        <div className="prose prose-sm max-w-none border p-4 rounded-md bg-white h-80 overflow-y-auto" dangerouslySetInnerHTML={simpleMarkdownToHtml(assessmentContent)} />
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
         <ModalWrapper
-            title="✨ Gợi ý Hoạt động & Soạn Giáo án (AI)"
+            title="✨ Trợ lý AI: Thiết kế & Đánh giá"
             onClose={onClose}
             footer={footer}
             headerColorClass="bg-orange-700 border-b-4 border-orange-900"
             maxWidthClass="max-w-4xl"
         >
-            <div className="p-6 overflow-y-auto bg-gray-50">
-                <div className="bg-white p-4 rounded-lg border mb-4">
-                    <p className="text-sm font-semibold text-gray-700">Đang xử lý cho bài học:</p>
-                    <h3 className="text-lg font-bold text-orange-800">{lessonTitle}</h3>
-                    <p className="text-sm font-semibold text-gray-700 mt-2">Với các năng lực số:</p>
-                    <pre className="text-xs bg-gray-100 p-2 rounded mt-1 whitespace-pre-wrap font-sans">{nlsString}</pre>
+            <div className="bg-gray-50 flex flex-col h-[80vh]">
+                {/* Header Info */}
+                <div className="bg-white p-4 border-b shadow-sm flex-shrink-0">
+                    <p className="text-sm font-semibold text-gray-700">Bài học: <span className="text-orange-700 text-base">{lessonTitle}</span></p>
+                    <p className="text-xs text-gray-500 mt-1 truncate">NLS: {nlsString.replace(/\n/g, ', ')}</p>
                 </div>
-                <div className="mt-4">
-                    {renderContent()}
+
+                {/* Tabs */}
+                <div className="flex border-b bg-white flex-shrink-0">
+                    <button
+                        className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'plan' ? 'border-orange-600 text-orange-700 bg-orange-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        onClick={() => setActiveTab('plan')}
+                    >
+                        📚 Soạn Giáo án
+                    </button>
+                    <button
+                        className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'assessment' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        onClick={() => setActiveTab('assessment')}
+                    >
+                        📝 Công cụ Đánh giá (Mới)
+                    </button>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="p-6 overflow-y-auto flex-grow">
+                    {isLoading ? (
+                        <div className="text-center p-10 flex flex-col items-center justify-center">
+                            <SpinnerIcon className="w-12 h-12 text-orange-600" />
+                            <p className="mt-4 font-semibold text-gray-600">Đang khởi tạo...</p>
+                        </div>
+                    ) : (
+                        error ? (
+                            <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg">
+                                <p className="font-bold">Đã xảy ra lỗi</p>
+                                <p>{error}</p>
+                            </div>
+                        ) : (
+                            activeTab === 'plan' ? renderLessonPlanTab() : renderAssessmentTab()
+                        )
+                    )}
                 </div>
             </div>
             <style>{`
